@@ -4,24 +4,10 @@
 #include <string.h>
 #include <unistd.h>
 
-#define ESC 27
+#include "banka.h"
 
-typedef enum {true = 1,false = 0} bool;
-
-typedef struct {
-    char id[20];
-    char name[50];
-    float cash;
-    int months;
-} Client;
-
-typedef struct Node Node;
-struct Node {
-    Client client;
-    Node *next;
-};
-
-Node *head = NULL;
+//static - only in this file
+static Node *head = NULL;
 
 int getMenuOption() {
     int option = 0;
@@ -29,7 +15,7 @@ int getMenuOption() {
     while(option < 1 || option > 5) {
             //system("CLS");
 
-            puts("\n\nChoose option[1-5]\n");
+            puts("\nChoose option[1-5]");
             puts("1. Add new client");
             puts("2. Get client by given id");
             puts("3. Delete client by given id");
@@ -64,7 +50,7 @@ bool isEmpty() {
     return head == NULL;
 }
 
-bool isIdUnique(char id[]) {
+static bool isIdUnique(char id[]) {
     if(isEmpty()) return true;
 
     Node *curr = head;
@@ -77,29 +63,43 @@ bool isIdUnique(char id[]) {
 
     return true;
 }
+
 Client createNewClient() {
     Client newClient;
-    int errorFlag = 0;
-
+    bool errorFlag = 0;
+    bool notUniqueIdFlag = 0;
     do {
         fflush(stdin);
-        if(errorFlag) {
-            puts("Wrong input , press ENTER to try again  or ESC to exit");
+
+        if(errorFlag || notUniqueIdFlag) {
+            if(errorFlag) {
+                puts("Wrong input, press ENTER to try again or ESC to exit");
+
+            } else if(notUniqueIdFlag) {
+                puts("This ID already exists, press ENTER to try again  or ESC to exit");
+            }
+
             if(getch() == ESC) {
                     freeElems();
                     exit(0);
             }
+
+            errorFlag = 0;
+            notUniqueIdFlag = 0;
         }
-        errorFlag = 0;
 
         puts("\nEnter client ID:");
-        if(!(scanf("%s", newClient.id)) || !isIdUnique(newClient.id)) {
+        if(!(scanf("%20[^\n]", newClient.id))) {
             errorFlag = 1;
             continue;
-        };
+        } else if(!isIdUnique(newClient.id)) {
+            notUniqueIdFlag = 1;
+            continue;
+        }
 
+        fflush(stdin);
         puts("Enter client names:");
-        if(!(scanf("%s", newClient.name))) {
+        if(!(scanf("%50[^\n]", newClient.name))) {
             errorFlag = 1;
             continue;
         };
@@ -115,18 +115,19 @@ Client createNewClient() {
         if(!(scanf("%d", &newClient.months))) {
             errorFlag = 1;
         };
-    } while(errorFlag);
+    } while(errorFlag || notUniqueIdFlag);
 
+    puts("The client is added successfully!\n");
+    puts("Press ENTER to Continue...");
+    getch();
     return newClient;
 }
 
-void addNewElem() {
-    Client client = createNewClient();
+void addNewElem(Client client) {
     Node *newNode = (Node *) malloc (sizeof(Node));
     newNode->client = client;
     newNode->next = head;
     head = newNode;
-    printf("\nThe client is added successfully!\n");
 }
 
 void getClientById() {
@@ -134,18 +135,27 @@ void getClientById() {
         puts("There is no clients!\n");
     } else {
         char id[20];
+        bool foundClient = false;
         Node *curr = head;
+        fflush(stdin);
         puts("Enter the ID:");
-        scanf("%s", id);
+        scanf("%20[^\n]", id);
+
         while(curr != NULL) {
             if(strcmp(id, curr->client.id) == 0) {
-                printf("Client name: %s\n", curr->client.name);
+                foundClient = true;
+                printf("\nClient name: %s\n", curr->client.name);
                 printf("Client amount: %f\n", curr->client.cash);
                 break;
             }
             curr = curr->next;
         }
+        if(!foundClient) {
+            puts("No client with such ID");
+        }
     }
+    puts("Press ENTER to Continue...");
+    getch();
 }
 
 void deleteClientById() {
@@ -172,7 +182,7 @@ void deleteClientById() {
                 }
 
                 free(curr);
-                printf("Client removed successfully!");
+                puts("The client is removed successfully!");
                 break;
             }
 
@@ -184,19 +194,12 @@ void deleteClientById() {
             puts("No matching client was found for the given ID");
         }
     }
+
+    puts("Press ENTER to Continue...");
+    getch();
 }
 
-void printElems() {
-    Node* curr = head;
-
-    while(curr != NULL) {
-        printf("\n%s", curr->client.name);
-        curr = curr->next;
-    }
-    printf("\n\n");
-}
-
-float getAvrAmount() {
+static float getAvrAmount() {
     float sum = 0;
     int count = 0;
     Node *curr = head;
@@ -215,31 +218,38 @@ float getAvrAmount() {
 }
 
 void listClients() {
-    float avarageAmount = getAvrAmount();
-    Node *curr = head;
-
-    while(curr != NULL) {
-        if(curr->client.cash > avarageAmount) {
-            printf("Client ID: \n%s\n", curr->client.id);
-            printf("Client name: \n%s\n\n", curr->client.name);
-        }
-        curr = curr->next;
+    if(isEmpty()) {
+        puts("There is no clients!\n");
     }
+    else {
+        float avarageAmount = getAvrAmount();
+        Node *curr = head;
+
+        while(curr != NULL) {
+            if(curr->client.cash > avarageAmount) {
+                printf("Client ID: \n%s\n", curr->client.id);
+                printf("Client name: \n%s\n\n", curr->client.name);
+            }
+            curr = curr->next;
+        }
+    }
+    puts("Press ENTER to Continue...");
+    getch();
 }
 
 void loadData() {
     FILE* fp = NULL;
-    fp = fopen("data.bin", "rb");
+    Client client;
 
+    fp = fopen("data.bin", "rb");
     //if file exists and it is opened successfully
     if(fp != NULL) {
             while(1) {
-                if(fread()) {
+                if(fread(&client, sizeof(Client), 1, fp) != 1) {
                     break;
                 }
-
+                addNewElem(client);
             }
-
 
         fclose(fp);
     }
@@ -248,37 +258,17 @@ void loadData() {
 void saveData() {
     FILE* fp = NULL;
 
-    //fp = fopen("data.bin", "")
+    fp = fopen("data.bin", "wb");
+    if(fp == NULL) {
+        puts("Error saving data!\n");
+    } else {
+        Node *curr = head;
 
-
-}
-
-int main() {
-    int option = 0;
-    //loadData();
-    while(1) {
-        option = getMenuOption();
-
-        switch(option) {
-        case 1:
-                addNewElem();
-                break;
-        case 2:
-                getClientById();
-                break;
-        case 3:
-                deleteClientById();
-                break;
-        case 4:
-                listClients();
-                break;
-        default:
-                freeElems();
-                return 0;
+        while(curr != NULL) {
+            fwrite(&curr->client, sizeof(Client), 1, fp);
+            curr = curr->next;
         }
+        fclose(fp);
     }
 
-    //getClientById();
-
-    return 0;
 }
